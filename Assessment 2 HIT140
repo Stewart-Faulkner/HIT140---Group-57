@@ -1,0 +1,79 @@
+""" Assessment 2 HIT140
+
+# 1. Loading the Datasets
+"""
+
+import pandas as pd
+import numpy as np
+from scipy import stats
+
+# Load the datasets
+dataset1 = pd.read_csv('dataset1.csv')
+dataset2 = pd.read_csv('dataset2.csv')
+dataset3 = pd.read_csv('dataset3.csv')
+
+# Merge datasets on ID
+merged_data = pd.merge(pd.merge(dataset1, dataset2, on='ID'), dataset3, on='ID')
+
+merged_data.isnull().sum()
+
+"""# 2. Confidence Interval Calculation"""
+
+# Calculate total screen time (sum of all screen time columns)
+merged_data['total_screen_time'] = (merged_data['C_we'] + merged_data['C_wk'] +
+                                    merged_data['G_we'] + merged_data['G_wk'] +
+                                    merged_data['S_we'] + merged_data['S_wk'] +
+                                    merged_data['T_we'] + merged_data['T_wk'])
+
+# Group by gender and calculate mean and standard error for total screen time
+grouped_data = merged_data.groupby('gender')['total_screen_time'].agg(['mean', 'std', 'count'])
+
+# Calculate the confidence interval for each group
+confidence_level = 0.95
+z_value = stats.norm.ppf(1 - (1 - confidence_level) / 2)
+
+grouped_data['SE'] = grouped_data['std'] / np.sqrt(grouped_data['count'])
+grouped_data['CI_lower'] = grouped_data['mean'] - z_value * grouped_data['SE']
+grouped_data['CI_upper'] = grouped_data['mean'] + z_value * grouped_data['SE']
+
+print(grouped_data[['mean', 'CI_lower', 'CI_upper']])
+
+"""# 3. Hypothesis Testing (Two-Sample t-test)"""
+
+# Create a binary variable for high vs. low screen time (e.g., median split)
+median_screen_time = merged_data['total_screen_time'].median()
+merged_data['screen_time_group'] = np.where(merged_data['total_screen_time'] > median_screen_time, 'High', 'Low')
+
+# Choose a well-being indicator (e.g., 'Goodme')
+well_being_indicator = 'Goodme'
+
+# Perform an independent t-test between the two screen time groups
+high_group = merged_data[merged_data['screen_time_group'] == 'High'][well_being_indicator]
+low_group = merged_data[merged_data['screen_time_group'] == 'Low'][well_being_indicator]
+
+t_stat, p_value = stats.ttest_ind(high_group, low_group)
+
+print(f"T-statistic: {t_stat}")
+print(f"P-value: {p_value}")
+
+"""# 4. Visualizations"""
+
+import matplotlib.pyplot as plt
+
+# Visualization for Confidence Interval
+plt.figure(figsize=(8, 6))
+plt.bar(grouped_data.index, grouped_data['mean'], yerr=z_value * grouped_data['SE'], capsize=5)
+plt.xlabel('Gender')
+plt.ylabel('Average Total Screen Time (Hours)')
+plt.title('Confidence Interval for Average Total Screen Time by Gender')
+plt.show()
+
+# Visualization for Hypothesis Testing (Box Plot)
+plt.figure(figsize=(8, 6))
+merged_data.boxplot(column=well_being_indicator, by='screen_time_group')
+plt.title('Well-being Score by Screen Time Group')
+plt.suptitle('')
+plt.xlabel('Screen Time Group')
+plt.ylabel(f'{well_being_indicator} Score')
+plt.show()
+
